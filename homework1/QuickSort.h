@@ -17,6 +17,8 @@ void *quickSort(void *t);
 
 void debug(int pos);
 
-int cmpfunc (const void * a, const void * b);
+int cmpfunc(const void * a, const void * b);
+
+int cmpPair(const void * a, const void * b);
 
 //#endif

@@ -21,13 +21,18 @@ struct data {
     pthread_mutex_t* locks;
 };
 
+struct pair {
+    int data;
+    int idx;
+};
+
 struct quickSortData {
-    int lh, rh;
+    int lh, rh, num_threads;
     int *inputArray, *helperArray;
 };
 
-int inputArray_len;
-int num_threads;
+int inputArrayLen;
+int totalThreadsNum;
 int *sortedArray;
 int depth = 0;
 
@@ -37,52 +42,73 @@ int main() {
 
     int *inputArray;
     int *helperArray;
-    int *ref_arr;
-    num_threads = 1;
+//    int *ref_arr1;
+    int *ref_arr2;
 
     printf("Enter array length: ");
     fflush(stdout);
-    scanf("%d", &inputArray_len);
+    scanf("%d", &inputArrayLen);
     printf("Enter number of threads: ");
     fflush(stdout);
-    scanf("%d", &num_threads);
+    scanf("%d", &totalThreadsNum);
 
-    inputArray = (int *) malloc(inputArray_len * sizeof(int));
+    printf("Preparing data, please wait...\n");
+    fflush(stdout);
+    inputArray = (int *) malloc(inputArrayLen * sizeof(int));
     sortedArray = inputArray;
-    helperArray = (int *) malloc(inputArray_len * sizeof(int));
-    ref_arr = (int *) malloc(inputArray_len * sizeof(int));
+    helperArray = (int *) malloc(inputArrayLen * sizeof(int));
+//    ref_arr1 = (int *) malloc(inputArrayLen * sizeof(int));
+    ref_arr2 = (int *) malloc(inputArrayLen * sizeof(int));
 
-    for (int i = 0; i < inputArray_len; i++) {
-        inputArray[i] = rand() % inputArray_len;
-        ref_arr[i] = inputArray[i];
+    for (int i = 0; i < inputArrayLen; i++) {
+//        inputArray[i] = rand() % inputArrayLen;
+        inputArray[i] = rand();
+//        ref_arr1[i] = inputArray[i];
+        ref_arr2[i] = inputArray[i];
     }
-    qsort(ref_arr, inputArray_len, sizeof(int), cmpfunc);
+//    qsort(ref_arr1, inputArrayLen, sizeof(int), cmpfunc);
 
-    struct quickSortData t;
-    t.lh = 0;
-    t.rh = inputArray_len - 1;
-    t.inputArray = inputArray;
-    t.helperArray = helperArray;
+    struct quickSortData t1, t2;
+    t1.lh = 0;
+    t1.rh = inputArrayLen - 1;
+    t1.inputArray = inputArray;
+    t1.helperArray = helperArray;
+    t1.num_threads = totalThreadsNum;
+
+    t2.lh = 0;
+    t2.rh = inputArrayLen - 1;
+    t2.inputArray = ref_arr2;
+    t2.helperArray = helperArray;
+    t2.num_threads = 1;
+
+    printf("Data preparation done!\n");
+    printf("Sorting...\n");
+    fflush(stdout);
+    gettimeofday(&start, NULL);
+    quickSort(&t1);
+    gettimeofday(&end, NULL);
+    printf("Time use for parallel version: %ld\n", (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
+    fflush(stdout);
 
     gettimeofday(&start, NULL);
-    quickSort(&t);
+    quickSort(&t2);
     gettimeofday(&end, NULL);
-    printf("Time use: %ld\n", (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
 
-    for (int i = 0; i < inputArray_len; i++) {
-        if (sortedArray[i] != ref_arr[i]) {
+
+    for (int i = 0; i < inputArrayLen; i++) {
+        if (sortedArray[i] != ref_arr2[i]) {
             printf("Wrong Sorting!\n");
-            fflush(stdout);
+            printf("res: ");
+            printArray(sortedArray, inputArrayLen);
+            printf("ref: ");
+            printArray(ref_arr2, inputArrayLen);
             exit(0);
         }
     }
     printf("Correct!\n");
+    printf("Time use for single-thread version: %ld\n", (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
     fflush(stdout);
 
-//    printf("res: ");
-//    printArray(sortedArray, inputArray_len);
-//    printf("ref: ");
-//    printArray(ref_arr, inputArray_len);
 }
 
 void printArray(int array[], int len) {
@@ -163,35 +189,33 @@ void *prefixSumInclusive(void *t) {
 
     prefixSums[idx] = getPrefixSum(idx, fTree, conds, locks);
 //    debug(164);
-    fflush(stdout);
+//    fflush(stdout);
 
     int offsetR = idx == 0 ? 0 : prefixSums[idx] - currentSum;
     int offsetL = idx == 0 ? 0 : ((lh - LH) - 1 - (prefixSums[idx] - currentSum)); // definitely correct!
 //    printf("lh: %d, rh: %d\n", lh, rh);
-    fflush(stdout);
     for (int i = lh; i <= rh; i++) {
         if (inputArray[i] > pivot) {
             helperArray[RH - offsetR] = inputArray[i];
 //            printf("inputArray[i]: %d, pos: %d\n", inputArray[i], RH - offsetR);
-            fflush(stdout);
             offsetR++;
         }
         else {
             helperArray[LH + offsetL] = inputArray[i];
 //            printf("inputArray[i]: %d, pos: %d\n", inputArray[i], LH + offsetL);
-            fflush(stdout);
             offsetL++;
         }
     }
 }
 
 void *quickSort(void *t) {
-    struct quickSortData *args = t;
+    struct quickSortData* args = t;
 
     int lh = args->lh;
     int rh = args->rh;
     int *inputArray = args->inputArray;
     int *helperArray = args->helperArray;
+    int num_threads = args->num_threads;
 
 
     // recursion exit
@@ -199,9 +223,29 @@ void *quickSort(void *t) {
         if (inputArray != sortedArray) sortedArray[lh] = inputArray[lh];
         return NULL;
     }
-    if (lh > rh) return NULL;
 
+    if (lh > rh) return NULL;
     
+    if ((num_threads <= 1) || (rh - lh < inputArrayLen / totalThreadsNum)) {
+//        printf("[lh, rh]: [%d, %d], num of threads: %d\n", lh, rh, num_threads);
+//        fflush(stdout);
+        qsort(inputArray + lh, rh - lh + 1, sizeof(int), cmpfunc);
+        for (int i = lh; i <= rh; i++) sortedArray[i] = inputArray[i];
+        return NULL;
+    }
+
+    struct pair pairs[2000];
+    for (int i = 0; i < 2000; i++) {
+        pairs[i].idx = (rand() % (rh - lh + 1)) + lh;
+        pairs[i].data = inputArray[pairs[i].idx];
+    }
+
+    qsort(pairs, 2000, sizeof(struct pair), cmpPair);
+
+    int x = inputArray[lh];
+    inputArray[lh] = pairs[1000].data;
+    inputArray[pairs[1000].idx] = x;
+
     int n = (rh - lh) / num_threads;
 
     // clear fTree and prefixSums array
@@ -225,7 +269,6 @@ void *quickSort(void *t) {
 //    debug(273);
     // create threads
     for (int i = 0; i < num_threads; i++) {
-
         prefixSumArgs[i].idx = i;
         prefixSumArgs[i].lh = lh + 1 + i * n;
         prefixSumArgs[i].rh = i == num_threads - 1 ? rh : prefixSumArgs[i].lh + n - 1;
@@ -238,7 +281,6 @@ void *quickSort(void *t) {
         prefixSumArgs[i].prefixSums = prefixSums;
         prefixSumArgs[i].locks = locks;
         prefixSumArgs[i].conds = conds;
-
         pthread_create(&tids[i], NULL, prefixSumInclusive, &prefixSumArgs[i]);
 //        debug(180);
     }
@@ -254,6 +296,7 @@ void *quickSort(void *t) {
     int mid = (rh - lh + 1) - 1 - prefixSums[num_threads - 1] + lh;
     helperArray[mid] = inputArray[lh];
     inputArray[mid] = inputArray[lh];
+    
 
     int *tmp = inputArray;
     inputArray = helperArray;
@@ -264,18 +307,25 @@ void *quickSort(void *t) {
     lhData.rh = mid - 1;
     lhData.inputArray = inputArray;
     lhData.helperArray = helperArray;
+    lhData.num_threads = (int)((1.0 * num_threads * (mid - lh) / (rh - lh + 1)) + 0.5);
 
     rhData.lh = mid + 1;
     rhData.rh = rh;
     rhData.inputArray = inputArray;
     rhData.helperArray = helperArray;
+    rhData.num_threads = num_threads - lhData.num_threads;
+
+//    printf("left: [%d, %d], right: [%d, %d]\n", lhData.lh, lhData.rh, rhData.lh, rhData.rh);
+//    printf("[lh, rh]: [%d, %d], num of threads: %d\n", lh, rh, num_threads);
+//    fflush(stdout);
 
     pthread_t tid;
     pthread_create(&tid, NULL, quickSort, &lhData);
     quickSort(&rhData);
 
     pthread_join(tid, NULL);
-
+//
+//
     free(fTree);
     free(prefixSums);
     free(conds);
@@ -289,8 +339,12 @@ void debug(int pos) {
     fflush(stdout);
 }
 
-int cmpfunc (const void * a, const void * b) {
+int cmpfunc(const void * a, const void * b) {
     return ( *(int*)a - *(int*)b );
+}
+
+int cmpPair(const void * a, const void * b) {
+    return (((struct pair*)a)->data - ((struct pair*)b)->data);
 }
 
 // lock obj

@@ -18,7 +18,7 @@ QuickSort: QuickSort.o
 	gcc -o QuickSort QuickSort.o -pthread
 
 QuickSort.o: QuickSort.c QuickSort.h
-	gcc -c QuickSort.c -pthread
+	gcc -c -O3 QuickSort.c -pthread
 
 # To start over from scratch, type 'make clean'.  This
 # removes the executable file, as well as old .o object
