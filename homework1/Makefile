@@ -17,7 +17,7 @@ default: QuickSort
 QuickSort: QuickSort.o
 	gcc -o QuickSort QuickSort.o -pthread
 
-QuickSort.o: QuickSort.c
+QuickSort.o: QuickSort.c QuickSort.h
 	gcc -c QuickSort.c -pthread
 
 # To start over from scratch, type 'make clean'.  This
