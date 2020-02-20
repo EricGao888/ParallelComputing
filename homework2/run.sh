@@ -1,0 +1,1 @@
+mpirun -np 16 ./QuickSort 32
