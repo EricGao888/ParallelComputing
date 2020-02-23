@@ -17,11 +17,9 @@ void printArray(int array[], int len);
 
 void MPInitialize(int argc, char *argv[]);
 
-void preprocess(int *array, int len);
-
 void distribute(int *array, int len);
 
-int getPivot(MPI_Comm comm);
+int getPivot(MPI_Comm comm, int commNum);
 
 int *merge(int *array1, int len1, int *array2, int len2);
 

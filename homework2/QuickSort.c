@@ -83,47 +83,6 @@ void MPInitialize(int argc, char *argv[]) {
     char processor_name[MPI_MAX_PROCESSOR_NAME];
     int name_len;
     MPI_Get_processor_name(processor_name, &name_len);
-
-    // Print off a hello world message
-//    printf("Process %s created! Rank %d out of %d processes\n", processor_name, rank, size);
-//    fflush(stdout);
-}
-
-void preprocess(int *array, int len) {
-    int displs[size];
-    int sendCounts[size];
-    int recvBuffer[len];
-    int remain = len % size;
-    int offset = 0;
-    int buffer[len];
-
-    for (int i = 0; i < size; i++) {
-        sendCounts[i] = len / size;
-        if (remain > 0) {
-            sendCounts[i]++;
-            remain--;
-        }
-
-        displs[i] = offset;
-        offset += sendCounts[i];
-    }
-
-    // divide the data among processes as described by sendcounts and displs
-    MPI_Scatterv(array, sendCounts, displs, MPI_INT, recvBuffer, len, MPI_INT, 0, MPI_COMM_WORLD);
-    qsort(recvBuffer, sendCounts[rank], sizeof(int), cmpFunction);
-
-
-    // change send and receive to gatherv
-    for (int src = 0; src < size; src++) {
-        if (rank == src) {
-            MPI_Gatherv(recvBuffer, sendCounts[src], MPI_INT, array, sendCounts, displs, MPI_INT, 0, MPI_COMM_WORLD);
-        }
-    }
-
-    if (rank == 0) {
-        printf("Array after preprocessing: ");
-        printArray(array, len);
-    }
 }
 
 void distribute(int *array, int len) {
@@ -168,14 +127,14 @@ void gather(int *inputArray) {
     }
 }
 
-int getPivot(MPI_Comm communicator) {
+int getPivot(MPI_Comm communicator, int commNum) {
     int localMedium;
     if (subarrayLen == 0) localMedium = -1;
     else localMedium = subarray[(subarrayLen & 1) ? (subarrayLen / 2) : (subarrayLen / 2 - 1)];
-    int mediums[size];
-    MPI_Allgather(&localMedium, 1, MPI_INT, &mediums, 1, MPI_INT, MPI_COMM_WORLD);
-    qsort(mediums, size, sizeof(int), cmpFunction);
-    int globalMedium = mediums[(size & 1) ? (size / 2) : (size / 2 - 1)];
+    int mediums[commNum];
+    MPI_Allgather(&localMedium, 1, MPI_INT, &mediums, 1, MPI_INT, communicator);
+    qsort(mediums, commNum, sizeof(int), cmpFunction);
+    int globalMedium = mediums[(commNum & 1) ? (commNum / 2) : (commNum / 2 - 1)];
 //    if (rank == 0) {
 //        printArray(mediums, size);
 //        printf("Pivot: %d\n", globalMedium);
@@ -190,6 +149,7 @@ void quickSort(int *inputArray) {
     MPI_Comm communicator = MPI_COMM_WORLD;
     MPI_Comm newCommunicator;
     MPI_Status status;
+    int commNum = size;
     int *recvBuffer;
     int recvBufferLen;
     int round = -1;
@@ -204,7 +164,7 @@ void quickSort(int *inputArray) {
         }
         tmp &= 1;
         int dst = rank ^ flip;
-        int pivot = getPivot(communicator);
+        int pivot = getPivot(communicator, commNum);
         int idx = binarySearch(subarray, 0, subarrayLen - 1, pivot);
 //        printf("rank %d, pivot idx: %d\n", rank, idx);
 //        printf("rank: %d, dst: %d\n", rank, dst);
@@ -243,6 +203,7 @@ void quickSort(int *inputArray) {
             subarrayLen = subarrayLen - idx + recvBufferLen;
         }
         communicator = newCommunicator;
+        commNum /= 2;
         free(recvBuffer);
     }
 }
