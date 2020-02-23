@@ -17,8 +17,14 @@ MPICC?=mpicc
 
 all: ${EXECS}
 
-QuickSort: QuickSort.c QuickSort.h
-	${MPICC} -o QuickSort QuickSort.h QuickSort.c
+QuickSort.o: QuickSort.c QuickSort.h
+	${MPICC} -c -O3 QuickSort.c
+
+Utility.o: Utility.c QuickSort.h
+	${MPICC} -c -O3 Utility.c
+
+QuickSort: Utility.o QuickSort.o
+	${MPICC} -o QuickSort Utility.o QuickSort.o
 
 # QuickSort.o: QuickSort.c QuickSort.h
 #	gcc -c -O3 QuickSort.c -pthread
@@ -28,4 +34,4 @@ QuickSort: QuickSort.c QuickSort.h
 # files and *~ backup files:
 #
 clean:
-	rm -f ${EXECS}
+	rm -f ${EXECS} *.o
